@@ -26,23 +26,19 @@ jobs:
           node-version: 20.19.0
           architecture: ${{ matrix.arch }}
 
-      # 2. 安装 pnpm
-      - name: Install pnpm
-        run: npm install -g pnpm
-
       # 3. 安装依赖（跳过引擎检查 + 修复 lockfile）
       - name: Install dependencies
         working-directory: picgo
-        run: pnpm install --no-frozen-lockfile --ignore-scripts --ignore-engine
+        run: npm install
 
       # 4. 编译项目
       - name: Build project
         working-directory: picgo
-        run: pnpm run build
+        run: npm run build
 
       # 5. 安装支持 Node20 的 pkg
       - name: Install pkg
-        run: npm install -g pkg@next
+        run: npm install -g pkg
 
       # 6. 打包 EXE（关键：用 node18 兼容打包，不会报错）
       - name: Package to EXE
