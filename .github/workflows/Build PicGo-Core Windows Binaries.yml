@@ -57,7 +57,7 @@ jobs:
 
       # 关键修复：用支持 Node20 的新一代打包工具 @yao-pkg/pkg
       - name: Install yao-pkg (fixed pkg)
-        run: npm install -g @yao-pkg/pkg@latest
+        run: npm install -g @yao-pkg/pkg@latest --force
 
       # 6. 打包 EXE（关键：用 node18 兼容打包，不会报错）
       - name: Package to EXE
