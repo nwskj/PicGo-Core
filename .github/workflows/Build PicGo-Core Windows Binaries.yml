@@ -1,4 +1,4 @@
-name: Build PicGo Win x64+x86 (FINAL)
+name: Build PicGo Win x64+x86 (REAL FINAL)
 on:
   workflow_dispatch:
 
@@ -12,59 +12,51 @@ jobs:
         arch: [x64, x86]
 
     steps:
-      - name: Checkout PicGo-Core
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           repository: PicGo/PicGo-Core
           ref: master
           path: picgo
 
-      - name: Setup Node.js 20.19.0
+      - name: Use Node.js 20.19.0
         uses: actions/setup-node@v4
         with:
           node-version: 20.19.0
           architecture: ${{ matrix.arch }}
 
+      - name: Install pnpm
+        run: npm install -g pnpm
+
       - name: Install dependencies
         working-directory: picgo
-        run: npm install
+        run: pnpm install --ignore-engines
 
-      - name: Build project
+      - name: Build
         working-directory: picgo
-        run: npm run build
+        run: pnpm run build
 
-      # ======================================================================
-      # 关键修复：创建 pkg 配置，强制打包所有依赖（解决 fflate 缺失）
-      # ======================================================================
-      - name: Create pkg config
+      # 关键：正确入口 + 强制打包所有依赖，不丢文件
+      - name: Write pkg config
         working-directory: picgo
         run: |
           echo '{
             "main": "./dist/index.cjs.js",
             "bin": "./dist/index.cjs.js",
             "pkg": {
-              "assets": [
-                "node_modules/**/*",
-                "dist/**/*"
-              ]
+              "assets": ["node_modules/**/*", "dist/**/*"],
+              "targets": ["node20-win-${{ matrix.arch }}"]
             }
-          }' > package-pkg.json
+          }' > pkg.json
 
-      # ======================================================================
-      # 关键修复：用支持 Node20 的新一代打包工具 @yao-pkg/pkg
-      # ======================================================================
-      - name: Install yao-pkg (fixed pkg)
+      - name: Install fixed pkg
         run: npm install -g @yao-pkg/pkg@latest
 
-      # ======================================================================
-      # 关键修复：正确打包，不再丢文件
-      # ======================================================================
-      - name: Package to EXE
+      # 正确打包！！！
+      - name: Build EXE
         working-directory: picgo
-        run: |
-          pkg package-pkg.json --targets node20-win-${{ matrix.arch }} --output picgo-${{ matrix.arch }}.exe
+        run: pkg pkg.json -o picgo-${{ matrix.arch }}.exe
 
-      - name: Upload EXE
+      - name: Upload
         uses: actions/upload-artifact@v4
         with:
           name: picgo-windows-${{ matrix.arch }}
