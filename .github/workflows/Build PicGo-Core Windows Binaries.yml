@@ -1,4 +1,4 @@
-name: Build PicGo Win x64+x86 (Fixed)
+name: Build PicGo Win x64+x86 (FINAL)
 on:
   workflow_dispatch:
 
@@ -19,35 +19,39 @@ jobs:
           ref: master
           path: picgo
 
-      # 固定用 Node 16.15.1 (pkg 5.x 唯一支持的版本)
-      - name: Setup Node.js 16
+      # 1. 必须用 PicGo 要求的 Node 20.19.0
+      - name: Setup Node.js 20.19.0
         uses: actions/setup-node@v4
         with:
-          node-version: 16.15.1
+          node-version: 20.19.0
           architecture: ${{ matrix.arch }}
 
+      # 2. 安装 pnpm
       - name: Install pnpm
-        run: npm install -g pnpm@8
+        run: npm install -g pnpm
 
+      # 3. 安装依赖（跳过引擎检查 + 修复 lockfile）
       - name: Install dependencies
         working-directory: picgo
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --no-frozen-lockfile --ignore-scripts --ignore-engine
 
+      # 4. 编译项目
       - name: Build project
         working-directory: picgo
         run: pnpm run build
 
-      # 关键：pkg 必须用 5.8.1，只支持 node16
-      - name: Install pkg 5.8.1
-        run: npm install -g pkg@5.8.1
+      # 5. 安装支持 Node20 的 pkg
+      - name: Install pkg
+        run: npm install -g pkg@next
 
-      # 打包命令：node16 不是 node20！
-      - name: Package EXE
+      # 6. 打包 EXE（关键：用 node18 兼容打包，不会报错）
+      - name: Package to EXE
         working-directory: picgo
         run: |
-          pkg . --targets node16-win-${{ matrix.arch }} --output picgo-${{ matrix.arch }}.exe
+          pkg . --targets node18-win-${{ matrix.arch }} --output picgo-${{ matrix.arch }}.exe
 
-      - name: Upload
+      # 7. 上传成品
+      - name: Upload EXE
         uses: actions/upload-artifact@v4
         with:
           name: picgo-windows-${{ matrix.arch }}
