@@ -1,12 +1,10 @@
-name: Build PicGo-Core Win64 + x86 (Node20.19.0)
+name: Build PicGo Win x64+x86 (Fixed)
 on:
-  workflow_dispatch:  # 手动触发（推荐）
-  push:
-    branches: [master]
+  workflow_dispatch:
 
 jobs:
   build:
-    name: Build Windows ${{ matrix.arch }}
+    name: Build Win ${{ matrix.arch }}
     runs-on: windows-latest
     strategy:
       fail-fast: false
@@ -14,7 +12,6 @@ jobs:
         arch: [x64, x86]
 
     steps:
-      # 1. 拉取 PicGo 官方最新代码
       - name: Checkout PicGo-Core
         uses: actions/checkout@v4
         with:
@@ -22,39 +19,35 @@ jobs:
           ref: master
           path: picgo
 
-      # 2. 安装【PicGo 强制要求的固定版本】Node.js 20.19.0
-      - name: Setup Node.js 20.19.0
+      # 固定用 Node 16.15.1 (pkg 5.x 唯一支持的版本)
+      - name: Setup Node.js 16
         uses: actions/setup-node@v4
         with:
-          node-version: 20.19.0  # 严格匹配官方要求
+          node-version: 16.15.1
           architecture: ${{ matrix.arch }}
 
-      # 3. 安装 pnpm
       - name: Install pnpm
-        run: npm install -g pnpm
+        run: npm install -g pnpm@8
 
-      # 4. 安装依赖
       - name: Install dependencies
         working-directory: picgo
         run: pnpm install --frozen-lockfile
 
-      # 5. 编译 TS 源码
-      - name: Build PicGo
+      - name: Build project
         working-directory: picgo
         run: pnpm run build
 
-      # 6. 安装支持 Node20 的 pkg
-      - name: Install pkg
-        run: npm install -g pkg@latest
+      # 关键：pkg 必须用 5.8.1，只支持 node16
+      - name: Install pkg 5.8.1
+        run: npm install -g pkg@5.8.1
 
-      # 7. 打包 EXE（严格匹配 Node20 + 架构）
-      - name: Package to EXE
+      # 打包命令：node16 不是 node20！
+      - name: Package EXE
         working-directory: picgo
         run: |
-          pkg . --targets node20-win-${{ matrix.arch }} --output picgo-${{ matrix.arch }}.exe
+          pkg . --targets node16-win-${{ matrix.arch }} --output picgo-${{ matrix.arch }}.exe
 
-      # 8. 上传编译好的 exe
-      - name: Upload EXE Artifact
+      - name: Upload
         uses: actions/upload-artifact@v4
         with:
           name: picgo-windows-${{ matrix.arch }}
