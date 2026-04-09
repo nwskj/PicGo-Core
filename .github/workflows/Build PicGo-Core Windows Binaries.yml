@@ -19,34 +19,51 @@ jobs:
           ref: master
           path: picgo
 
-      # 1. 必须用 PicGo 要求的 Node 20.19.0
       - name: Setup Node.js 20.19.0
         uses: actions/setup-node@v4
         with:
           node-version: 20.19.0
           architecture: ${{ matrix.arch }}
 
-      # 3. 安装依赖（跳过引擎检查 + 修复 lockfile）
       - name: Install dependencies
         working-directory: picgo
         run: npm install
 
-      # 4. 编译项目
       - name: Build project
         working-directory: picgo
         run: npm run build
 
-      # 5. 安装支持 Node20 的 pkg
-      - name: Install pkg
-        run: npm install -g pkg
+      # ======================================================================
+      # 关键修复：创建 pkg 配置，强制打包所有依赖（解决 fflate 缺失）
+      # ======================================================================
+      - name: Create pkg config
+        working-directory: picgo
+        run: |
+          echo '{
+            "main": "./dist/index.cjs.js",
+            "bin": "./dist/index.cjs.js",
+            "pkg": {
+              "assets": [
+                "node_modules/**/*",
+                "dist/**/*"
+              ]
+            }
+          }' > package-pkg.json
 
-      # 6. 打包 EXE（关键：用 node18 兼容打包，不会报错）
+      # ======================================================================
+      # 关键修复：用支持 Node20 的新一代打包工具 @yao-pkg/pkg
+      # ======================================================================
+      - name: Install yao-pkg (fixed pkg)
+        run: npm install -g @yao-pkg/pkg@latest
+
+      # ======================================================================
+      # 关键修复：正确打包，不再丢文件
+      # ======================================================================
       - name: Package to EXE
         working-directory: picgo
         run: |
-          pkg . --targets node18-win-${{ matrix.arch }} --output picgo-${{ matrix.arch }}.exe
+          pkg package-pkg.json --targets node20-win-${{ matrix.arch }} --output picgo-${{ matrix.arch }}.exe
 
-      # 7. 上传成品
       - name: Upload EXE
         uses: actions/upload-artifact@v4
         with:
