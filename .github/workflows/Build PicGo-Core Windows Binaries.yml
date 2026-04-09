@@ -1,6 +1,6 @@
-name: Build PicGo-Core Windows (x64+x86)
+name: Build PicGo-Core Win64 + x86 (Node20.19.0)
 on:
-  workflow_dispatch:  # 允许手动触发
+  workflow_dispatch:  # 手动触发（推荐）
   push:
     branches: [master]
 
@@ -14,43 +14,47 @@ jobs:
         arch: [x64, x86]
 
     steps:
-      - name: Checkout PicGo-Core latest
+      # 1. 拉取 PicGo 官方最新代码
+      - name: Checkout PicGo-Core
         uses: actions/checkout@v4
         with:
           repository: PicGo/PicGo-Core
           ref: master
           path: picgo
 
-      # 安装 Node 20
-      - name: Setup Node.js 20
+      # 2. 安装【PicGo 强制要求的固定版本】Node.js 20.19.0
+      - name: Setup Node.js 20.19.0
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 20.19.0  # 严格匹配官方要求
           architecture: ${{ matrix.arch }}
 
-      # 安装 pnpm（修复你遇到的错误）
+      # 3. 安装 pnpm
       - name: Install pnpm
         run: npm install -g pnpm
 
-      # 安装依赖
+      # 4. 安装依赖
       - name: Install dependencies
         working-directory: picgo
         run: pnpm install --frozen-lockfile
 
-      # 编译 TS
-      - name: Build
+      # 5. 编译 TS 源码
+      - name: Build PicGo
         working-directory: picgo
         run: pnpm run build
 
-      # 打包成 exe
+      # 6. 安装支持 Node20 的 pkg
+      - name: Install pkg
+        run: npm install -g pkg@latest
+
+      # 7. 打包 EXE（严格匹配 Node20 + 架构）
       - name: Package to EXE
         working-directory: picgo
         run: |
-          npm install -g pkg
-          pkg . --targets node20-${{ matrix.arch }}-win --output picgo-${{ matrix.arch }}.exe
+          pkg . --targets node20-win-${{ matrix.arch }} --output picgo-${{ matrix.arch }}.exe
 
-      # 上传成品
-      - name: Upload EXE
+      # 8. 上传编译好的 exe
+      - name: Upload EXE Artifact
         uses: actions/upload-artifact@v4
         with:
           name: picgo-windows-${{ matrix.arch }}
