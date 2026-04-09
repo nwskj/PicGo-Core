@@ -1,66 +1,62 @@
-name: 自动编译 PicList Win x64+x86
+name: Auto Compile (Win/Armbian)
 on:
-  workflow_dispatch:    # 手动触发
-  push:
-    branches: [master]  # 提交自动编译
+  # 1. 每20天触发（UTC时间每月1日、21日，覆盖20天间隔）
   schedule:
-    - cron: '0 0 * * *' # 每天凌晨自动拉取最新代码编译
+    - cron: '0 0 1,21 * *'
+  # 2. 手动触发（方便测试）
+  workflow_dispatch:
+
+# 并发控制：避免重复编译
+concurrency:
+  group: ${{ github.ref }}-auto-compile
+  cancel-in-progress: true
 
 jobs:
-  build:
-    name: 构建 Win ${{ matrix.arch }}
-    runs-on: windows-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        arch: [x64, x86]
-
+  # 任务1：Windows系统编译
+  compile-windows:
+    runs-on: windows-latest  # GitHub托管的Windows运行器
+    # 轻量化配置：禁用不必要的功能
+    env:
+      GIT_TERMINAL_PROMPT: 0  # 禁用git交互提示
     steps:
-      # 已改为：PicList-Core 仓库
-      - name: 拉取 PicList 最新代码
+      - name: 拉取代码（轻量化克隆，仅最新提交）
         uses: actions/checkout@v4
         with:
-          repository: Kuingsmile/PicList-Core
-          ref: master
-          path: piclist
+          fetch-depth: 1  # 仅拉取最新提交，减少耗时和磁盘占用
 
-      - name: 使用 Node.js 20.19.0
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20.19.0
-          architecture: ${{ matrix.arch }}
-
-      - name: 安装 pnpm
-        run: npm install -g pnpm
-
-      - name: 安装依赖
-        working-directory: piclist
-        run: pnpm install --ignore-engines
-
-      - name: 编译项目
-        working-directory: piclist
-        run: pnpm run build
-
-      - name: 创建打包配置
-        working-directory: piclist
+      - name: 执行编译（Windows）
+        shell: pwsh
         run: |
-          echo '{
-            "main": "./dist/index.cjs.js",
-            "bin": "./dist/index.cjs.js",
-            "pkg": {
-              "assets": ["node_modules/**/*", "dist/**/*"]
-            }
-          }' > package-pkg.json
+          # 替换为你的Windows编译命令（示例：make/msbuild等）
+          cd ${{ github.workspace }}
+          make clean 2>&1 || echo "Clean skipped (no makefile)"
+          make 2>&1
 
-      - name: 安装打包工具
-        run: npm install -g @yao-pkg/pkg@latest --force
+      - name: 输出编译日志（可选，轻量化可注释）
+        if: always()
+        run: |
+          Get-Content ./compile.log -ErrorAction SilentlyContinue
 
-      - name: 打包 EXE
-        working-directory: piclist
-        run: pkg package-pkg.json --targets node20-win-${{ matrix.arch }} -o piclist-${{ matrix.arch }}.exe
-
-      - name: 上传成品
-        uses: actions/upload-artifact@v4
+  # 任务2：Armbian系统编译
+  compile-armbian:
+    runs-on: [self-hosted, armbian]  # 匹配Armbian自托管Runner的标签
+    env:
+      GIT_TERMINAL_PROMPT: 0
+    steps:
+      - name: 拉取代码（轻量化克隆）
+        uses: actions/checkout@v4
         with:
-          name: piclist-windows-${{ matrix.arch }}
-          path: piclist/piclist-${{ matrix.arch }}.exe
+          fetch-depth: 1
+
+      - name: 执行编译（Armbian）
+        shell: bash
+        run: |
+          # 替换为你的Armbian编译命令（示例：make）
+          cd ${{ github.workspace }}
+          make clean 2>&1 || echo "Clean skipped (no makefile)"
+          make 2>&1
+
+      - name: 输出编译日志（可选）
+        if: always()
+        run: |
+          cat ./compile.log 2>/dev/null || echo "No log file"
