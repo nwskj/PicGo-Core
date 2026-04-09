@@ -1,0 +1,77 @@
+name: Build PicGo-Core Windows Binaries
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  workflow_dispatch: # 手动触发
+
+jobs:
+  build-windows:
+    name: Build Windows ${{ matrix.arch }}
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [x64, x86] # 编译x64和x86两个架构
+
+    steps:
+      # 1. 拉取PicGo-Core最新代码（直接从官方仓库拉取）
+      - name: Checkout PicGo-Core
+        uses: actions/checkout@v4
+        with:
+          repository: PicGo/PicGo-Core # 官方仓库地址
+          ref: master # 拉取master分支最新代码
+          path: picgo-core # 代码存放到picgo-core目录
+
+      # 2. 设置Node.js 20环境（匹配对应架构）
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.x
+          architecture: ${{ matrix.arch }}
+          cache: 'pnpm' # PicGo-Core使用pnpm，适配缓存
+          cache-dependency-path: picgo-core/pnpm-lock.yaml
+
+      # 3. 安装pnpm（PicGo-Core依赖pnpm管理）
+      - name: Install pnpm
+        run: npm install -g pnpm
+
+      # 4. 安装项目依赖
+      - name: Install dependencies
+        working-directory: ./picgo-core
+        run: pnpm install --frozen-lockfile
+
+      # 5. 编译TypeScript代码（PicGo-Core是TS编写）
+      - name: Build source code
+        working-directory: ./picgo-core
+        run: npm run build # 对应package.json中的build脚本
+
+      # 6. 安装pkg用于打包成exe
+      - name: Install pkg
+        run: npm install -g pkg
+
+      # 7. 打包成Windows可执行文件
+      - name: Package to EXE
+        working-directory: ./picgo-core
+        run: |
+          pkg . --targets node20-${{ matrix.arch }}-win --output picgo-core-${{ matrix.arch }}.exe
+        env:
+          PKG_TARGET_ARCH: ${{ matrix.arch }}
+
+      # 8. 上传编译产物（可在Actions页面下载）
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: picgo-core-win-${{ matrix.arch }}
+          path: picgo-core/picgo-core-${{ matrix.arch }}.exe
+          retention-days: 30 # 产物保留30天
+
+      # 可选：自动创建Release（打Tag时触发）
+      - name: Create Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: picgo-core/picgo-core-${{ matrix.arch }}.exe
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
