@@ -1,10 +1,14 @@
-name: Build PicGo Win x64+x86 (FINAL)
+name: 自动编译 PicList Win x64+x86
 on:
-  workflow_dispatch:
+  workflow_dispatch:    # 手动触发
+  push:
+    branches: [master]  # 提交自动编译
+  schedule:
+    - cron: '0 0 * * *' # 每天凌晨自动拉取最新代码编译
 
 jobs:
   build:
-    name: Build Win ${{ matrix.arch }}
+    name: 构建 Win ${{ matrix.arch }}
     runs-on: windows-latest
     strategy:
       fail-fast: false
@@ -12,62 +16,51 @@ jobs:
         arch: [x64, x86]
 
     steps:
-      - name: Checkout PicGo-Core
+      # 已改为：PicList-Core 仓库
+      - name: 拉取 PicList 最新代码
         uses: actions/checkout@v4
         with:
-          repository: PicGo/PicGo-Core
+          repository: Kuingsmile/PicList-Core
           ref: master
-          path: picgo
+          path: piclist
 
-      # 1. 必须用 PicGo 要求的 Node 20.19.0
-      - name: Setup Node.js 20.19.0
+      - name: 使用 Node.js 20.19.0
         uses: actions/setup-node@v4
         with:
           node-version: 20.19.0
           architecture: ${{ matrix.arch }}
 
-      # 3. 安装依赖（跳过引擎检查 + 修复 lockfile）
-      - name: Install dependencies
-        working-directory: picgo
-        run: npm install
+      - name: 安装 pnpm
+        run: npm install -g pnpm
 
-      # 4. 编译项目
-      - name: Build project
-        working-directory: picgo
-        run: npm run build
+      - name: 安装依赖
+        working-directory: piclist
+        run: pnpm install --ignore-engines
 
-      # 5. 安装支持 Node20 的 pkg
-      - name: Install pkg
-        run: npm install -g pkg
+      - name: 编译项目
+        working-directory: piclist
+        run: pnpm run build
 
-      # 关键修复：创建 pkg 配置，强制打包所有依赖（解决 fflate 缺失）
-      - name: Create pkg config
-        working-directory: picgo
+      - name: 创建打包配置
+        working-directory: piclist
         run: |
           echo '{
             "main": "./dist/index.cjs.js",
             "bin": "./dist/index.cjs.js",
             "pkg": {
-              "assets": [
-                "node_modules/**/*",
-                "dist/**/*"
-              ]
+              "assets": ["node_modules/**/*", "dist/**/*"]
             }
           }' > package-pkg.json
 
-      # 关键修复：用支持 Node20 的新一代打包工具 @yao-pkg/pkg
-      - name: Install yao-pkg (fixed pkg)
+      - name: 安装打包工具
         run: npm install -g @yao-pkg/pkg@latest --force
 
-      # 6. 打包 EXE（关键：用 node18 兼容打包，不会报错）
-      - name: Package to EXE
-        working-directory: picgo
-        run: |
-          pkg package-pkg.json --targets win-${{ matrix.arch }} --output picgo-${{ matrix.arch }}.exe
+      - name: 打包 EXE
+        working-directory: piclist
+        run: pkg package-pkg.json --targets node20-win-${{ matrix.arch }} -o piclist-${{ matrix.arch }}.exe
 
-      # 7. 上传成品
-      - name: Upload EXE
+      - name: 上传成品
         uses: actions/upload-artifact@v4
         with:
-          name: picgo-windows-${{ matrix.arch }}
-          path: picgo/picgo-${{ matrix.arch }}.exe
+          name: piclist-windows-${{ matrix.arch }}
+          path: piclist/piclist-${{ matrix.arch }}.exe
